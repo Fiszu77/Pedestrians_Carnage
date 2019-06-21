@@ -14,6 +14,7 @@ Stopwatch::Stopwatch() {
 }
 
 void Stopwatch::startTimer() {
+	cout << "start" << endl;
 	QueryPerformanceFrequency(&Frequency);
 	QueryPerformanceCounter(&StartingTime);
 }

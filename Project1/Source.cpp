@@ -93,24 +93,26 @@ public:
 
 
 int main(int argc, char* argv[]) {
-	
-		VideoCapture cap("ny.mp4");
 
-		if (!cap.isOpened()) {
-			cout << "Error opening video stream or file" << endl;
-			return -1;
-		}
+	Stopwatch timer;
+	timer.startTimer();
+	VideoCapture cap("videoplayback.mp4");
 
-		double fps = cap.get(CAP_PROP_FPS);
-		int FPS_INT = (int)fps;
-		Mat mediane;
-		int frameCount = cap.get(CAP_PROP_FRAME_COUNT);
-		const int density = 20;
-		Mat framesILike[density] = {};
-		int iterator = (int)frameCount / density;
-		int currIt = 0;
-		int i = 0;
-		Stopwatch timer;
+	if (!cap.isOpened()) {
+		cout << "Error opening video stream or file" << endl;
+		return -1;
+	}
+
+	double fps = cap.get(CAP_PROP_FPS);
+	int FPS_INT = (int)fps;
+	Mat mediane;
+	int frameCount = cap.get(CAP_PROP_FRAME_COUNT);
+	const int density = 60;
+	Mat framesILike[density] = {};
+	int iterator = (int)frameCount / density;
+	int currIt = 0;
+	int i = 0;
+		
 
 
 		//cap.read(framesILike[0]);
@@ -151,9 +153,11 @@ int main(int argc, char* argv[]) {
 			efficientGrayscale(framesILike[i], framesILike[i]);
 			currIt += iterator;
 		}
-		array<uchar, density> toProcess;
 		mediane = Mat(framesILike[0].rows, framesILike[0].cols, CV_8UC1);
-		//timer.startTimer();
+
+		/*timer.startTimer();
+		array<uchar, density> toProcess;
+		timer.startTimer();
 		for (int i = 0; i < framesILike[0].cols; i++) {
 			for (int j = 0; j < framesILike[0].rows; j++) {
 				for (int k = 0; k < density; k++)
@@ -164,15 +168,19 @@ int main(int argc, char* argv[]) {
 				mediane.at<uchar>(Point(i, j)) = toProcess[(int)density / 2];
 			}
 		}
-		//timer.getTimeWithMessage();
+		timer.getTimeWithMessage();*/
+
+
 		const int dim = framesILike[0].cols * framesILike[0].rows;
 		
 		MultiArr all(density, dim);
 
-		mediane = Mat(framesILike[0].rows, framesILike[0].cols, CV_8UC1);
+		timer.getTimeWithMessage();
 		timer.startTimer();
 		int nRows = framesILike[0].rows;
 		int nCols = framesILike[0].cols;
+		uchar* pf;
+		uchar* pm;
 		for (int k = 0; k < density; k++)
 		{
 			if (framesILike[k].isContinuous())
@@ -180,25 +188,37 @@ int main(int argc, char* argv[]) {
 				nCols *= nRows;
 				nRows = 1;
 			}
-			uchar* pf;
-			int mov = 0;
 			for (int i = 0; i < nRows; i++) {
 				pf = framesILike[k].ptr<uchar>(i);
+				pm = mediane.ptr<uchar>(i);
 				for (int j = 0; j < nCols; j++) {
+					
 					for (int l = 0; l < density; l++)
 					{
+						
 						if (all.toProcess[l][i * framesILike[k].rows + j] > pf[j])
 						{
-							
-							for (int m = density - 1; m >= mov+l;m--)
+							for (int m = density - 1; m > l;m--)
 							{
 								all.toProcess[m][i * framesILike[k].rows + j] = all.toProcess[m - 1][i * framesILike[k].rows + j];
 							}
 							all.toProcess[l][i * framesILike[k].rows + j] = pf[j];
-							mov++;
+							break;
 						}
 					}
-					all.toProcess[k][i * framesILike[k].rows + j] = pf[j];
+					if (k == density - 1)
+					{
+						pm[j] = all.toProcess[(int)(density * 0.5f)][i * framesILike[k].rows + j];
+					}
+					
+					/*if (j == 99)
+					{
+						cout << "real num: " <<(int) pf[j] << endl;
+						for (int g = 0; g < density; g++)
+						{
+							cout <<(int) all.toProcess[g][i * framesILike[k].rows + j] << endl;
+						}
+					}*/
 				}
 			}
 		}
