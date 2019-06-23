@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
 
 	Stopwatch timer;
 	timer.startTimer();
-	VideoCapture cap("traffic.mp4");
+	VideoCapture cap("ny.mp4");
 
 	if (!cap.isOpened()) {
 		cout << "Error opening video stream or file" << endl;
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
 	int FPS_INT = (int)fps;
 	Mat mediane;
 	int frameCount = cap.get(CAP_PROP_FRAME_COUNT);
-	const int density = 40;
+	const int density = 30;
 	Mat framesILike[density] = {};
 	int iterator = (int)frameCount / density;
 	int currIt = 0;
@@ -145,9 +145,10 @@ int main(int argc, char* argv[]) {
 		//		if (c == 27)
 		//			break;
 		//}
-		cap.set(1, currIt);
+		
 		for (int i = 0; i < density; i++)
 		{
+			cap.set(1, currIt);
 			cap.read(framesILike[i]);
 			if (framesILike[i].depth() != CV_8U)
 				framesILike[i].convertTo(framesILike[i], CV_8UC3);
