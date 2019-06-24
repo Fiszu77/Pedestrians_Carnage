@@ -12,6 +12,14 @@ using namespace cv;
 
 void efficientGrayscale(Mat toGray, Mat &out)
 {
+	const int lutlength = 768;
+	uchar LUT[lutlength] = {};
+	float pointthree = 1 / 3;
+	for (int i = 0; i < lutlength; ++i)
+	{
+		LUT[i] = (uchar)(i/3);
+	}
+
 	if (toGray.depth() != CV_8U)
 		toGray.convertTo(toGray, CV_8UC3);
 	out = Mat(toGray.rows, toGray.cols, CV_8UC1);
@@ -33,7 +41,7 @@ void efficientGrayscale(Mat toGray, Mat &out)
 		po = out.ptr<uchar>(i);
 		for (j = 0; j < nCols; ++j)
 		{
-			po[j] = (uchar)((pg[(j - 1) * 3 + 1] + pg[(j - 1) * 3 + 2] + pg[(j - 1) * 3 + 3]) / 3);
+			po[j] = LUT[(pg[(j - 1) * 3 + 1] + pg[(j - 1) * 3 + 2] + pg[(j - 1) * 3 + 3])];
 		}
 	}
 
@@ -96,7 +104,7 @@ int main(int argc, char* argv[]) {
 
 	Stopwatch timer;
 	timer.startTimer();
-	VideoCapture cap("ny.mp4");
+	VideoCapture cap("traffic.mp4");
 
 	if (!cap.isOpened()) {
 		cout << "Error opening video stream or file" << endl;
@@ -105,15 +113,15 @@ int main(int argc, char* argv[]) {
 
 	double fps = cap.get(CAP_PROP_FPS);
 	int FPS_INT = (int)fps;
-	Mat mediane;
+	Mat mediane,medianeC;
 	int frameCount = cap.get(CAP_PROP_FRAME_COUNT);
 	const int density = 30;
 	Mat framesILike[density] = {};
+	Mat framesILikeInColour[density] = {};
 	int iterator = (int)frameCount / density;
 	int currIt = 0;
 	int i = 0;
-		
-
+	
 
 		//cap.read(framesILike[0]);
 		//Mat grayed(framesILike[0].rows, framesILike[0].cols, CV_8UC1);
@@ -149,15 +157,15 @@ int main(int argc, char* argv[]) {
 		for (int i = 0; i < density; i++)
 		{
 			cap.set(1, currIt);
-			cap.read(framesILike[i]);
-			if (framesILike[i].depth() != CV_8U)
-				framesILike[i].convertTo(framesILike[i], CV_8UC3);
-			framesILike[i].convertTo(framesILike[i], CV_8U);
-			efficientGrayscale(framesILike[i], framesILike[i]);
+			cap.read(framesILikeInColour[i]);
+			if (framesILikeInColour[i].depth() != CV_8U)
+				framesILikeInColour[i].convertTo(framesILikeInColour[i], CV_8UC3);
+			framesILikeInColour[i].convertTo(framesILikeInColour[i], CV_8U);
+			efficientGrayscale(framesILikeInColour[i], framesILike[i]);
 			currIt += iterator;
 		}
 		mediane = Mat(framesILike[0].rows, framesILike[0].cols, CV_8UC1);
-
+		medianeC = Mat(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC3);
 		/*timer.startTimer();
 		array<uchar, density> toProcess;
 		timer.startTimer();
@@ -174,44 +182,67 @@ int main(int argc, char* argv[]) {
 		timer.getTimeWithMessage();*/
 
 
-		const int dim = framesILike[0].cols * framesILike[0].rows;
+		const int dim = framesILikeInColour[0].cols * framesILikeInColour[0].rows * 3;
 		
 		MultiArr all(density, dim);
 
 		timer.getTimeWithMessage();
 		timer.startTimer();
-		int nRows = framesILike[0].rows;
-		int nCols = framesILike[0].cols;
+		int nRows = framesILikeInColour[0].rows;
+		int nCols = framesILikeInColour[0].cols;
 		uchar* pf;
 		uchar* pm;
+		int LUTB[255] = {};
+		int LUTG[255] = {};
+		int LUTR[255] = {};
+		float bw = 1.0, gw = 1.0, rw = 1.0;
+		for (int i = 0; i < 255; ++i)
+		{
+			LUTB[i] = (int)(i*bw);
+		}
+		for (int i = 0; i < 255; ++i)
+		{
+			LUTG[i] = (int)(i * gw);
+		}
+		for (int i = 0; i < 255; ++i)
+		{
+			LUTR[i] = (int)(i * rw);
+		}
 		for (int k = 0; k < density; k++)
 		{
-			if (framesILike[k].isContinuous())
+			if (framesILikeInColour[k].isContinuous())
 			{
 				nCols *= nRows;
 				nRows = 1;
 			}
 			for (int i = 0; i < nRows; i++) {
-				pf = framesILike[k].ptr<uchar>(i);
-				pm = mediane.ptr<uchar>(i);
+				pf = framesILikeInColour[k].ptr<uchar>(i);
+				pm = medianeC.ptr<uchar>(i);
 				for (int j = 0; j < nCols; j++) {
-					
 					for (int l = 0; l < density; l++)
-					{
-						
-						if (all.toProcess[l][i * framesILike[k].rows + j] > pf[j])
+					{	
+						if (LUTR[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 2]] +
+							LUTG[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 1]] +
+							LUTB[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 ]] > LUTR[pf[j * 3 +2]] + LUTG[pf[j * 3 + 1]] + LUTB[pf[j * 3]])
 						{
-							for (int m = density - 1; m > l;m--)
+							for (int m = density - 1; m > l; m--)
 							{
-								all.toProcess[m][i * framesILike[k].rows + j] = all.toProcess[m - 1][i * framesILike[k].rows + j];
+								all.toProcess[m][i * framesILikeInColour[k].rows + j * 3] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3];
+								all.toProcess[m][i * framesILikeInColour[k].rows + j * 3 + 1] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 1];
+								all.toProcess[m][i * framesILikeInColour[k].rows + j * 3 + 2] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 2];
 							}
-							all.toProcess[l][i * framesILike[k].rows + j] = pf[j];
+							all.toProcess[l][i * framesILikeInColour[k].rows + j * 3] = pf[j * 3];
+							all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 1] = pf[j * 3 + 1];
+							all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 2] = pf[j * 3 + 2];
 							break;
 						}
 					}
 					if (k == density - 1)
 					{
-						pm[j] = all.toProcess[(int)(density * 0.5f)][i * framesILike[k].rows + j];
+						pm[j * 3] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3];
+						pm[j * 3 + 1] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3 + 1];
+						pm[j * 3 + 2] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3 + 2];
+
 					}
 					
 					/*if (j == 99)
@@ -229,7 +260,7 @@ int main(int argc, char* argv[]) {
 		cap.set(1, 0);
 		while (1) {
 
-			imshow("After", mediane);
+			imshow("After", medianeC);
 
 			Mat frame;
 			// Capture frame-by-frame
@@ -254,7 +285,7 @@ int main(int argc, char* argv[]) {
 	
 
 	// Closes all the frames
-	destroyAllWindows();
+	cv::destroyAllWindows();
 
 	return 0;
 }
