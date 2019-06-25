@@ -3,6 +3,7 @@
 #include "opencv2/opencv.hpp"
 #include <sstream>
 #include <windows.h>
+#include <thread>
 #include "Stopwatch.h"
 
 using namespace std;
@@ -64,6 +65,8 @@ void simpleGrayscale(Mat& toGray, Mat& out)
 	}
 }
 
+const int density = 18;
+
 class MultiArr {
 public:
 	uchar** toProcess;
@@ -82,9 +85,9 @@ public:
 		}
 		for (int i = 0; i < dens; ++i)
 		{
-			for (int j = 0; j< dim; ++j)
+			for (int j = 0; j < dim; ++j)
 			{
-				toProcess[i][j] =(uchar) 255;
+				toProcess[i][j] = (uchar)255;
 			}
 		}
 	}
@@ -99,9 +102,94 @@ public:
 	}
 };
 
+void pCarnage(vector<Mat>& framesILikeInColour, Mat& medianeC, int id)
+{
+	const int dim = framesILikeInColour[0].cols * framesILikeInColour[0].rows * 3;
+	//cout << "rows"<<framesILikeInColour[0].rows << endl;
+	MultiArr all(density, dim);
+
+	
+	int nRows = framesILikeInColour[0].rows;
+	int nCols = framesILikeInColour[0].cols;
+
+	int rowsToM = nRows;
+
+	uchar* pf;
+	uchar* pm;
+
+	int LUTB[255] = {};
+	int LUTG[255] = {};
+	int LUTR[255] = {};
+	float bw = 1.0, gw = 1.0, rw = 1.0;
+	for (int i = 0; i < 255; ++i)
+	{
+		LUTB[i] = (int)(i * bw);
+	}
+	for (int i = 0; i < 255; ++i)
+	{
+		LUTG[i] = (int)(i * gw);
+	}
+	for (int i = 0; i < 255; ++i)
+	{
+		LUTR[i] = (int)(i * rw);
+	}
+	for (int k = 0; k < density; k++)
+	{
+		if (framesILikeInColour[k].isContinuous())
+		{
+
+			nCols *= nRows;
+			nRows = 1;
+		}
+		for (int i = 0; i < nRows; i++) {
+			pf = framesILikeInColour[k].ptr<uchar>(i);
+			pm = medianeC.ptr<uchar>(i);
+			for (int j = 0; j < nCols; j++) {
+				for (int l = 0; l < density; l++)
+				{
+					if (LUTR[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 2]] +
+						LUTG[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 1]] +
+						LUTB[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3]] > LUTR[pf[j * 3 + 2]] + LUTG[pf[j * 3 + 1]] + LUTB[pf[j * 3]])
+					{
+						for (int m = density - 1; m > l; m--)
+						{
+							all.toProcess[m][i * framesILikeInColour[k].rows + j * 3] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3];
+							all.toProcess[m][i * framesILikeInColour[k].rows + j * 3 + 1] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 1];
+							all.toProcess[m][i * framesILikeInColour[k].rows + j * 3 + 2] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 2];
+						}
+						all.toProcess[l][i * framesILikeInColour[k].rows + j * 3] = pf[j * 3];
+						all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 1] = pf[j * 3 + 1];
+						all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 2] = pf[j * 3 + 2];
+						break;
+					}
+				}
+				if (k == density - 1)
+				{
+					pm[id * framesILikeInColour[0].rows + j * 3] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3];
+					pm[id * framesILikeInColour[0].rows + j * 3 + 1] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3 + 1];
+					pm[id * framesILikeInColour[0].rows + j * 3 + 2] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3 + 2];
+				}
+
+				/*if (j == 99)
+				{
+					cout << "real num: " <<(int) pf[j] << endl;
+					for (int g = 0; g < density; g++)
+					{
+						cout <<(int) all.toProcess[g][i * framesILike[k].rows + j] << endl;
+					}
+				}*/
+			}
+		}
+	}
+}
+
+
+
 
 int main(int argc, char* argv[]) {
 
+	const unsigned int nthreads = thread::hardware_concurrency();
+	vector<thread> t(nthreads - 1);
 	Stopwatch timer;
 	timer.startTimer();
 	VideoCapture cap("traffic.mp4");
@@ -115,9 +203,9 @@ int main(int argc, char* argv[]) {
 	int FPS_INT = (int)fps;
 	Mat mediane,medianeC;
 	int frameCount = cap.get(CAP_PROP_FRAME_COUNT);
-	const int density = 30;
 	Mat framesILike[density] = {};
 	Mat framesILikeInColour[density] = {};
+	Mat roiToCheck;
 	int iterator = (int)frameCount / density;
 	int currIt = 0;
 	int i = 0;
@@ -164,7 +252,6 @@ int main(int argc, char* argv[]) {
 			efficientGrayscale(framesILikeInColour[i], framesILike[i]);
 			currIt += iterator;
 		}
-		mediane = Mat(framesILike[0].rows, framesILike[0].cols, CV_8UC1);
 		medianeC = Mat(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC3);
 		/*timer.startTimer();
 		array<uchar, density> toProcess;
@@ -180,88 +267,35 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		timer.getTimeWithMessage();*/
-
-
-		const int dim = framesILikeInColour[0].cols * framesILikeInColour[0].rows * 3;
-		
-		MultiArr all(density, dim);
-
 		timer.getTimeWithMessage();
 		timer.startTimer();
-		int nRows = framesILikeInColour[0].rows;
-		int nCols = framesILikeInColour[0].cols;
-		uchar* pf;
-		uchar* pm;
-		int LUTB[255] = {};
-		int LUTG[255] = {};
-		int LUTR[255] = {};
-		float bw = 1.0, gw = 1.0, rw = 1.0;
-		for (int i = 0; i < 255; ++i)
+		vector<vector<Mat>> rois(nthreads - 1,vector<Mat>(density));
+		Rect roi;
+		int roiH = (int)framesILikeInColour[0].rows / (nthreads - 1);
+		int extRoiH = 0;
+		for (int i = 0; i < nthreads - 1; ++i)
 		{
-			LUTB[i] = (int)(i*bw);
-		}
-		for (int i = 0; i < 255; ++i)
-		{
-			LUTG[i] = (int)(i * gw);
-		}
-		for (int i = 0; i < 255; ++i)
-		{
-			LUTR[i] = (int)(i * rw);
-		}
-		for (int k = 0; k < density; k++)
-		{
-			if (framesILikeInColour[k].isContinuous())
+			if (i == nthreads - 2)
 			{
-				nCols *= nRows;
-				nRows = 1;
+				extRoiH = roiH + framesILikeInColour[0].rows - roiH * (i + 1);
+				roi = Rect(0, i * roiH, framesILikeInColour[0].cols, extRoiH);
 			}
-			for (int i = 0; i < nRows; i++) {
-				pf = framesILikeInColour[k].ptr<uchar>(i);
-				pm = medianeC.ptr<uchar>(i);
-				for (int j = 0; j < nCols; j++) {
-					for (int l = 0; l < density; l++)
-					{	
-						if (LUTR[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 2]] +
-							LUTG[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 1]] +
-							LUTB[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 ]] > LUTR[pf[j * 3 +2]] + LUTG[pf[j * 3 + 1]] + LUTB[pf[j * 3]])
-						{
-							for (int m = density - 1; m > l; m--)
-							{
-								all.toProcess[m][i * framesILikeInColour[k].rows + j * 3] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3];
-								all.toProcess[m][i * framesILikeInColour[k].rows + j * 3 + 1] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 1];
-								all.toProcess[m][i * framesILikeInColour[k].rows + j * 3 + 2] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 2];
-							}
-							all.toProcess[l][i * framesILikeInColour[k].rows + j * 3] = pf[j * 3];
-							all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 1] = pf[j * 3 + 1];
-							all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 2] = pf[j * 3 + 2];
-							break;
-						}
-					}
-					if (k == density - 1)
-					{
-						pm[j * 3] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3];
-						pm[j * 3 + 1] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3 + 1];
-						pm[j * 3 + 2] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3 + 2];
-
-					}
-					
-					/*if (j == 99)
-					{
-						cout << "real num: " <<(int) pf[j] << endl;
-						for (int g = 0; g < density; g++)
-						{
-							cout <<(int) all.toProcess[g][i * framesILike[k].rows + j] << endl;
-						}
-					}*/
-				}
+			else
+				roi = Rect(0,i*roiH,framesILikeInColour[0].cols,roiH);
+			for (int k = 0; k < density; k++)
+			{
+				rois[i][k] = framesILikeInColour[k](roi);
 			}
+			//cout << framesILikeInColour[0].rows << " " << framesILikeRoi[0].rows << endl;
+			t[i] = thread(pCarnage, ref(rois[i]), ref(medianeC), i);
 		}
+
+		//t[0] = thread(pCarnage, framesILikeInColour, ref(medianeC), i);
 		timer.getTimeWithMessage();
 		cap.set(1, 0);
 		while (1) {
 
 			imshow("After", medianeC);
-
 			Mat frame;
 			// Capture frame-by-frame
 			cap >> frame;
@@ -278,16 +312,21 @@ int main(int argc, char* argv[]) {
 			if (c == 27)
 				break;
 		}
-
+		getchar();
 		// When everything done, release the video capture object
 		cap.release();
 
 	
 
 	// Closes all the frames
-	cv::destroyAllWindows();
-
-	return 0;
+		for (int i = 0; i < nthreads - 1;++i)
+		{
+			t[i].join();
+		}
+		//t[0].join();
+		cv::destroyAllWindows();
+		
+		return 0;
 }
 
 
