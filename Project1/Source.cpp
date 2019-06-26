@@ -65,7 +65,7 @@ void simpleGrayscale(Mat& toGray, Mat& out)
 	}
 }
 
-const int density = 18;
+const int density = 30;
 
 class MultiArr {
 public:
@@ -101,73 +101,95 @@ public:
 		delete[] toProcess;
 	}
 };
+class MultiArrMat {
+public:
+	Mat** toProcess;
+	int dimensions;
+	int density;
 
-void pCarnage(vector<Mat>& framesILikeInColour, Mat& medianeC, int id)
+	MultiArrMat(int dens, int dim)
+	{
+		dimensions = dim;
+		density = dens;
+		toProcess = new Mat * [dens];
+
+		for (int i = 0; i < dens; ++i)
+		{
+			toProcess[i] = new Mat[dim];
+		}
+		/*for (int i = 0; i < dens; ++i)
+		{
+			for (int j = 0; j < dim; ++j)
+			{
+				toProcess[i][j] = sth
+			}
+		}*/
+	}
+
+	~MultiArrMat()
+	{
+		for (int i = 0; i < density; ++i)
+		{
+			delete[] toProcess[i];
+		}
+		delete[] toProcess;
+	}
+};
+
+
+void pCarnage(vector<Mat>& framesILikeInColour, Mat& medianeC, const int LUTB[255], const int LUTG[255], const int LUTR[255], int id = 0)
 {
-	const int dim = framesILikeInColour[0].cols * framesILikeInColour[0].rows * 3;
-	//cout << "rows"<<framesILikeInColour[0].rows << endl;
-	MultiArr all(density, dim);
-
-	
+	Stopwatch timer;
 	int nRows = framesILikeInColour[0].rows;
 	int nCols = framesILikeInColour[0].cols;
-
-	int rowsToM = nRows;
+	const int dim = nCols * nRows * 3;
+	//cout << "rows"<<framesILikeInColour[0].rows << endl;
+	MultiArr all(density, dim);
+	timer.startTimer();
+	int hDens = (int)(density * 0.5f);
+	
+	//int rowsToM = nCols;
 
 	uchar* pf;
 	uchar* pm;
 
-	int LUTB[255] = {};
-	int LUTG[255] = {};
-	int LUTR[255] = {};
-	float bw = 1.0, gw = 1.0, rw = 1.0;
-	for (int i = 0; i < 255; ++i)
-	{
-		LUTB[i] = (int)(i * bw);
-	}
-	for (int i = 0; i < 255; ++i)
-	{
-		LUTG[i] = (int)(i * gw);
-	}
-	for (int i = 0; i < 255; ++i)
-	{
-		LUTR[i] = (int)(i * rw);
-	}
+	
 	for (int k = 0; k < density; k++)
 	{
 		if (framesILikeInColour[k].isContinuous())
 		{
-
 			nCols *= nRows;
 			nRows = 1;
 		}
-		for (int i = 0; i < nRows; i++) {
+
+		for (int i = 0; i < nRows; i++)
+		{
 			pf = framesILikeInColour[k].ptr<uchar>(i);
 			pm = medianeC.ptr<uchar>(i);
 			for (int j = 0; j < nCols; j++) {
 				for (int l = 0; l < density; l++)
 				{
-					if (LUTR[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 2]] +
-						LUTG[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 1]] +
-						LUTB[all.toProcess[l][i * framesILikeInColour[k].rows + j * 3]] > LUTR[pf[j * 3 + 2]] + LUTG[pf[j * 3 + 1]] + LUTB[pf[j * 3]])
+					if (LUTR[all.toProcess[l][i * framesILikeInColour[0].rows + j * 3 + 2]] +
+						LUTG[all.toProcess[l][i * framesILikeInColour[0].rows + j * 3 + 1]] +
+						LUTB[all.toProcess[l][i * framesILikeInColour[0].rows + j * 3]] > LUTR[pf[j * 3 + 2]] + LUTG[pf[j * 3 + 1]] + LUTB[pf[j * 3]])
 					{
 						for (int m = density - 1; m > l; m--)
 						{
-							all.toProcess[m][i * framesILikeInColour[k].rows + j * 3] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3];
-							all.toProcess[m][i * framesILikeInColour[k].rows + j * 3 + 1] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 1];
-							all.toProcess[m][i * framesILikeInColour[k].rows + j * 3 + 2] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 2];
+							all.toProcess[m][i * framesILikeInColour[0].rows + j * 3] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3];
+							all.toProcess[m][i * framesILikeInColour[0].rows + j * 3 + 1] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 1];
+							all.toProcess[m][i * framesILikeInColour[0].rows + j * 3 + 2] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 2];
 						}
-						all.toProcess[l][i * framesILikeInColour[k].rows + j * 3] = pf[j * 3];
-						all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 1] = pf[j * 3 + 1];
-						all.toProcess[l][i * framesILikeInColour[k].rows + j * 3 + 2] = pf[j * 3 + 2];
+						all.toProcess[l][i * framesILikeInColour[0].rows + j * 3] = pf[j * 3];
+						all.toProcess[l][i * framesILikeInColour[0].rows + j * 3 + 1] = pf[j * 3 + 1];
+						all.toProcess[l][i * framesILikeInColour[0].rows + j * 3 + 2] = pf[j * 3 + 2];
 						break;
 					}
 				}
 				if (k == density - 1)
 				{
-					pm[id * framesILikeInColour[0].rows + j * 3] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3];
-					pm[id * framesILikeInColour[0].rows + j * 3 + 1] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3 + 1];
-					pm[id * framesILikeInColour[0].rows + j * 3 + 2] = all.toProcess[(int)(density * 0.5f)][i * framesILikeInColour[k].rows + j * 3 + 2];
+					pm[3 * id * nCols + j * 3] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3];
+					pm[3 * id * nCols + j * 3 + 1] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3 + 1];
+					pm[3 * id * nCols + j * 3 + 2] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3 + 2];
 				}
 
 				/*if (j == 99)
@@ -181,18 +203,104 @@ void pCarnage(vector<Mat>& framesILikeInColour, Mat& medianeC, int id)
 			}
 		}
 	}
+	timer.getTimeWithMessage();
 }
 
+void pCarnageArr(Mat framesILikeInColour[density], Mat& medianeC, const int LUTB[255], const int LUTG[255], const int LUTR[255], int id = 0)
+{
+	Stopwatch timer;
+	int nRows = framesILikeInColour[0].rows;
+	int nCols = framesILikeInColour[0].cols;
+	const int dim = nCols * nRows * 3;
+	//cout << "rows"<<framesILikeInColour[0].rows << endl;
+	MultiArr all(density, dim);
+	timer.startTimer();
+	int hDens = (int)(density * 0.5f);
 
+	//int rowsToM = nCols;
+
+	uchar* pf;
+	uchar* pm;
+
+
+	for (int k = 0; k < density; k++)
+	{
+		if (framesILikeInColour[k].isContinuous())
+		{
+			nCols *= nRows;
+			nRows = 1;
+		}
+
+		for (int i = 0; i < nRows; i++)
+		{
+			pf = framesILikeInColour[k].ptr<uchar>(i);
+			pm = medianeC.ptr<uchar>(i);
+			for (int j = 0; j < nCols; j++) {
+				for (int l = 0; l < density; l++)
+				{
+					if (LUTR[all.toProcess[l][i * framesILikeInColour[0].rows + j * 3 + 2]] +
+						LUTG[all.toProcess[l][i * framesILikeInColour[0].rows + j * 3 + 1]] +
+						LUTB[all.toProcess[l][i * framesILikeInColour[0].rows + j * 3]] > LUTR[pf[j * 3 + 2]] + LUTG[pf[j * 3 + 1]] + LUTB[pf[j * 3]])
+					{
+						for (int m = density - 1; m > l; m--)
+						{
+							all.toProcess[m][i * framesILikeInColour[0].rows + j * 3] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3];
+							all.toProcess[m][i * framesILikeInColour[0].rows + j * 3 + 1] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 1];
+							all.toProcess[m][i * framesILikeInColour[0].rows + j * 3 + 2] = all.toProcess[m - 1][i * framesILikeInColour[k].rows + j * 3 + 2];
+						}
+						all.toProcess[l][i * framesILikeInColour[0].rows + j * 3] = pf[j * 3];
+						all.toProcess[l][i * framesILikeInColour[0].rows + j * 3 + 1] = pf[j * 3 + 1];
+						all.toProcess[l][i * framesILikeInColour[0].rows + j * 3 + 2] = pf[j * 3 + 2];
+						break;
+					}
+				}
+				if (k == density - 1)
+				{
+					pm[3 * id * nCols + j * 3] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3];
+					pm[3 * id * nCols + j * 3 + 1] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3 + 1];
+					pm[3 * id * nCols + j * 3 + 2] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3 + 2];
+				}
+
+				/*if (j == 99)
+				{
+					cout << "real num: " <<(int) pf[j] << endl;
+					for (int g = 0; g < density; g++)
+					{
+						cout <<(int) all.toProcess[g][i * framesILike[k].rows + j] << endl;
+					}
+				}*/
+			}
+		}
+	}
+	timer.getTimeWithMessage();
+}
 
 
 int main(int argc, char* argv[]) {
 
+	int LUTB[255] = {};
+	int LUTG[255] = {};
+	int LUTR[255] = {};
+
 	const unsigned int nthreads = thread::hardware_concurrency();
 	vector<thread> t(nthreads - 1);
 	Stopwatch timer;
-	timer.startTimer();
-	VideoCapture cap("traffic.mp4");
+	//timer.startTimer();
+	VideoCapture cap("ny.mp4");
+
+	float bw = 1.0, gw = 1.0, rw = 1.0;
+	for (int i = 0; i < 255; ++i)
+	{
+		LUTB[i] = (int)(i * bw);
+	}
+	for (int i = 0; i < 255; ++i)
+	{
+		LUTG[i] = (int)(i * gw);
+	}
+	for (int i = 0; i < 255; ++i)
+	{
+		LUTR[i] = (int)(i * rw);
+	}
 
 	if (!cap.isOpened()) {
 		cout << "Error opening video stream or file" << endl;
@@ -248,8 +356,8 @@ int main(int argc, char* argv[]) {
 			cap.read(framesILikeInColour[i]);
 			if (framesILikeInColour[i].depth() != CV_8U)
 				framesILikeInColour[i].convertTo(framesILikeInColour[i], CV_8UC3);
-			framesILikeInColour[i].convertTo(framesILikeInColour[i], CV_8U);
-			efficientGrayscale(framesILikeInColour[i], framesILike[i]);
+			//framesILikeInColour[i].convertTo(framesILikeInColour[i], CV_8U);
+			//efficientGrayscale(framesILikeInColour[i], framesILike[i]);
 			currIt += iterator;
 		}
 		medianeC = Mat(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC3);
@@ -267,52 +375,57 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		timer.getTimeWithMessage();*/
-		timer.getTimeWithMessage();
-		timer.startTimer();
-		vector<vector<Mat>> rois(nthreads - 1,vector<Mat>(density));
+		//timer.getTimeWithMessage();
+	//	timer.startTimer();
+		//vector<vector<Mat>> rois(nthreads - 1,vector<Mat>(density));
+		//Mat roisArr[nth][density];
+		MultiArrMat roisArr(nthreads - 1, density);
 		Rect roi;
 		int roiH = (int)framesILikeInColour[0].rows / (nthreads - 1);
 		int extRoiH = 0;
-		for (int i = 0; i < nthreads - 1; ++i)
+		int d;
+		for (d = 0; d < nthreads-1 ; ++d)
 		{
-			if (i == nthreads - 2)
+			if (d == nthreads - 2)
 			{
-				extRoiH = roiH + framesILikeInColour[0].rows - roiH * (i + 1);
-				roi = Rect(0, i * roiH, framesILikeInColour[0].cols, extRoiH);
+				extRoiH = roiH + framesILikeInColour[0].rows - roiH * (d + 1);
+				roi = Rect(0, d * roiH, framesILikeInColour[0].cols, extRoiH);
 			}
 			else
-				roi = Rect(0,i*roiH,framesILikeInColour[0].cols,roiH);
+				roi = Rect(0,d*roiH,framesILikeInColour[0].cols,roiH);
 			for (int k = 0; k < density; k++)
 			{
-				rois[i][k] = framesILikeInColour[k](roi);
+				roisArr.toProcess[d][k] = framesILikeInColour[k](roi);
 			}
 			//cout << framesILikeInColour[0].rows << " " << framesILikeRoi[0].rows << endl;
-			t[i] = thread(pCarnage, ref(rois[i]), ref(medianeC), i);
+			t[d] = thread(pCarnageArr, roisArr.toProcess[d], ref(medianeC),LUTB, LUTG, LUTR, d);
 		}
-
+		//pCarnageArr(framesILikeInColour, ref(medianeC), LUTB, LUTG, LUTR, d);
 		//t[0] = thread(pCarnage, framesILikeInColour, ref(medianeC), i);
-		timer.getTimeWithMessage();
+		//timer.getTimeWithMessage();
 		cap.set(1, 0);
 		while (1) {
-
+			
 			imshow("After", medianeC);
 			Mat frame;
-			// Capture frame-by-frame
-			cap >> frame;
+			 //Capture frame-by-frame
+			
+				cap >> frame;
+			if (!frame.empty())
+			{
+				 //If the frame is empty, break immediately
+				/*if (frame.empty())
+					break;*/
 
-			// If the frame is empty, break immediately
-			if (frame.empty())
-				break;
-
-			// Display the resulting frame
-			imshow("Frame", frame);
+					// Display the resulting frame
+				imshow("Frame", frame);
+			}
 
 			// Press  ESC on keyboard to exit
 			char c = (char)waitKey(1000 / fps);
 			if (c == 27)
 				break;
 		}
-		getchar();
 		// When everything done, release the video capture object
 		cap.release();
 
