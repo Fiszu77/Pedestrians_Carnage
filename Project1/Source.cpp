@@ -5,11 +5,14 @@
 #include <windows.h>
 #include <thread>
 #include "Stopwatch.h"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/highgui.hpp"
 
 using namespace std;
 using namespace cv;
 
-
+//TODO detect when threads finished processing rois, leave moving things
 
 void efficientGrayscale(Mat toGray, Mat &out)
 {
@@ -106,7 +109,6 @@ public:
 	Mat** toProcess;
 	int dimensions;
 	int density;
-
 	MultiArrMat(int dens, int dim)
 	{
 		dimensions = dim;
@@ -286,9 +288,9 @@ int main(int argc, char* argv[]) {
 	vector<thread> t(nthreads - 1);
 	Stopwatch timer;
 	//timer.startTimer();
-	VideoCapture cap("ny.mp4");
+	VideoCapture cap("traffic.mp4");
 
-	float bw = 1.0, gw = 1.0, rw = 1.0;
+	float bw = 1.0, gw = 0.2, rw = 0.2;
 	for (int i = 0; i < 255; ++i)
 	{
 		LUTB[i] = (int)(i * bw);
@@ -380,6 +382,9 @@ int main(int argc, char* argv[]) {
 		//vector<vector<Mat>> rois(nthreads - 1,vector<Mat>(density));
 		//Mat roisArr[nth][density];
 		MultiArrMat roisArr(nthreads - 1, density);
+		Mat dst(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC1);
+		Mat dst2(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC1);
+		Mat med(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC1);
 		Rect roi;
 		int roiH = (int)framesILikeInColour[0].rows / (nthreads - 1);
 		int extRoiH = 0;
@@ -403,22 +408,28 @@ int main(int argc, char* argv[]) {
 		//pCarnageArr(framesILikeInColour, ref(medianeC), LUTB, LUTG, LUTR, d);
 		//t[0] = thread(pCarnage, framesILikeInColour, ref(medianeC), i);
 		//timer.getTimeWithMessage();
+		//
 		cap.set(1, 0);
 		while (1) {
 			
-			imshow("After", medianeC);
+			imshow("After", med);
 			Mat frame;
 			 //Capture frame-by-frame
 			
 				cap >> frame;
+				
 			if (!frame.empty())
 			{
+				//bitwise_xor(medianeC, frame, frame);
+				efficientGrayscale(frame, dst);
+				absdiff(med, dst, dst2);
+				//threshold(dst, dst,70,255,THRESH_BINARY);
 				 //If the frame is empty, break immediately
 				/*if (frame.empty())
 					break;*/
 
 					// Display the resulting frame
-				imshow("Frame", frame);
+				imshow("Frame", dst2);
 			}
 
 			// Press  ESC on keyboard to exit
