@@ -208,11 +208,12 @@ void pCarnage(vector<Mat>& framesILikeInColour, Mat& medianeC, const int LUTB[25
 	timer.getTimeWithMessage();
 }
 
-void pCarnageArr(Mat framesILikeInColour[density], Mat& medianeC, const int LUTB[255], const int LUTG[255], const int LUTR[255], int id = 0)
+void pCarnageArr(Mat framesILikeInColour[density], Mat& medianeC, const int LUTB[255], const int LUTG[255], const int LUTR[255],int defRoiH, int id = 0)
 {
 	Stopwatch timer;
 	int nRows = framesILikeInColour[0].rows;
 	int nCols = framesILikeInColour[0].cols;
+	int properIndexCols = defRoiH * framesILikeInColour[0].cols;
 	const int dim = nCols * nRows * 3;
 	//cout << "rows"<<framesILikeInColour[0].rows << endl;
 	MultiArr all(density, dim);
@@ -257,20 +258,11 @@ void pCarnageArr(Mat framesILikeInColour[density], Mat& medianeC, const int LUTB
 					}
 				}
 				if (k == density - 1)
-				{
-					pm[3 * id * nCols + j * 3] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3];
-					pm[3 * id * nCols + j * 3 + 1] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3 + 1];
-					pm[3 * id * nCols + j * 3 + 2] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3 + 2];
+				{		
+						pm[3 * id * properIndexCols + j * 3] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3];
+						pm[3 * id * properIndexCols + j * 3 + 1] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3 + 1];
+						pm[3 * id * properIndexCols + j * 3 + 2] = all.toProcess[hDens][i * framesILikeInColour[0].rows + j * 3 + 2];
 				}
-
-				/*if (j == 99)
-				{
-					cout << "real num: " <<(int) pf[j] << endl;
-					for (int g = 0; g < density; g++)
-					{
-						cout <<(int) all.toProcess[g][i * framesILike[k].rows + j] << endl;
-					}
-				}*/
 			}
 		}
 	}
@@ -284,13 +276,13 @@ int main(int argc, char* argv[]) {
 	int LUTG[255] = {};
 	int LUTR[255] = {};
 
-	const unsigned int nthreads = thread::hardware_concurrency();
+	const unsigned int nthreads = thread::hardware_concurrency()+1;
 	vector<thread> t(nthreads - 1);
 	Stopwatch timer;
 	//timer.startTimer();
-	VideoCapture cap("traffic.mp4");
+	VideoCapture cap("videoplayback.mp4");
 
-	float bw = 1.0, gw = 0.2, rw = 0.2;
+	float bw = 0.6, gw = 1, rw = 1;
 	for (int i = 0; i < 255; ++i)
 	{
 		LUTB[i] = (int)(i * bw);
@@ -383,17 +375,17 @@ int main(int argc, char* argv[]) {
 		//Mat roisArr[nth][density];
 		MultiArrMat roisArr(nthreads - 1, density);
 		Mat dst(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC1);
-		Mat dst2(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC1);
+		Mat dst2(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC3);
 		Mat med(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC1);
 		Rect roi;
-		int roiH = (int)framesILikeInColour[0].rows / (nthreads - 1);
+		int roiH = (int)(framesILikeInColour[0].rows / (nthreads - 1));
 		int extRoiH = 0;
 		int d;
-		for (d = 0; d < nthreads-1 ; ++d)
+		for (d = 0; d < nthreads-1 ; d++)
 		{
 			if (d == nthreads - 2)
 			{
-				extRoiH = roiH + framesILikeInColour[0].rows - roiH * (d + 1);
+				extRoiH = framesILikeInColour[0].rows - roiH * (d); //smth is wrong here
 				roi = Rect(0, d * roiH, framesILikeInColour[0].cols, extRoiH);
 			}
 			else
@@ -403,16 +395,19 @@ int main(int argc, char* argv[]) {
 				roisArr.toProcess[d][k] = framesILikeInColour[k](roi);
 			}
 			//cout << framesILikeInColour[0].rows << " " << framesILikeRoi[0].rows << endl;
-			t[d] = thread(pCarnageArr, roisArr.toProcess[d], ref(medianeC),LUTB, LUTG, LUTR, d);
+			t[d] = thread(pCarnageArr, roisArr.toProcess[d], ref(medianeC),LUTB, LUTG, LUTR,roiH, d);
 		}
 		//pCarnageArr(framesILikeInColour, ref(medianeC), LUTB, LUTG, LUTR, d);
 		//t[0] = thread(pCarnage, framesILikeInColour, ref(medianeC), i);
 		//timer.getTimeWithMessage();
 		//
+		
 		cap.set(1, 0);
 		while (1) {
 			
-			imshow("After", med);
+			imshow("Mediane", medianeC);
+			//efficientGrayscale(medianeC, med);
+			//imshow("med", med);
 			Mat frame;
 			 //Capture frame-by-frame
 			
@@ -421,16 +416,19 @@ int main(int argc, char* argv[]) {
 			if (!frame.empty())
 			{
 				//bitwise_xor(medianeC, frame, frame);
-				efficientGrayscale(frame, dst);
-				absdiff(med, dst, dst2);
-				//threshold(dst, dst,70,255,THRESH_BINARY);
+				//efficientGrayscale(frame, dst);
+				//absdiff(medianeC,frame,dst2);
+				//threshold(dst2, dst2,20,255,THRESH_BINARY);
 				 //If the frame is empty, break immediately
 				/*if (frame.empty())
 					break;*/
 
 					// Display the resulting frame
-				imshow("Frame", dst2);
+				//imshow("dst", dst);
+				imshow("Source", frame);
 			}
+			
+			
 
 			// Press  ESC on keyboard to exit
 			char c = (char)waitKey(1000 / fps);
