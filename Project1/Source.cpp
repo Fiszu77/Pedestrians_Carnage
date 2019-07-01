@@ -14,6 +14,8 @@ using namespace cv;
 
 //TODO detect when threads finished processing rois, leave moving things
 
+
+void Morphology_Operations(int, void*);
 void efficientGrayscale(Mat toGray, Mat &out)
 {
 	const int lutlength = 768;
@@ -269,6 +271,15 @@ void pCarnageArr(Mat framesILikeInColour[density], Mat& medianeC, const int LUTB
 	timer.getTimeWithMessage();
 }
 
+int morph_elem = 0;
+int morph_size = 0;
+int morph_add_operator = 5;
+int const max_add_operator = 5;
+int morph_operator = 0;
+int const max_operator = 4;
+int const max_elem = 2;
+int const max_kernel_size = 21;
+Mat dst2;
 
 int main(int argc, char* argv[]) {
 
@@ -280,7 +291,7 @@ int main(int argc, char* argv[]) {
 	vector<thread> t(nthreads - 1);
 	Stopwatch timer;
 	//timer.startTimer();
-	VideoCapture cap("videoplayback.mp4");
+	VideoCapture cap("traffic.mp4");
 
 	float bw = 0.6, gw = 1, rw = 1;
 	for (int i = 0; i < 255; ++i)
@@ -375,7 +386,7 @@ int main(int argc, char* argv[]) {
 		//Mat roisArr[nth][density];
 		MultiArrMat roisArr(nthreads - 1, density);
 		Mat dst(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC1);
-		Mat dst2(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC3);
+		dst2 = Mat(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC3);
 		Mat med(framesILikeInColour[0].rows, framesILikeInColour[0].cols, CV_8UC1);
 		Rect roi;
 		int roiH = (int)(framesILikeInColour[0].rows / (nthreads - 1));
@@ -402,31 +413,58 @@ int main(int argc, char* argv[]) {
 		//timer.getTimeWithMessage();
 		//
 		
+
+
+		
+
+
+		namedWindow("Morphology");
+
+		// Create Trackbar to select Morphology operation
+		createTrackbar("Operator:\n 0: Opening - 1: Closing \n 2: Gradient - 3: Top Hat \n 4: Black Hat", "Morphology", &morph_operator, max_operator, Morphology_Operations);
+
+		createTrackbar("Operator:\n 0: Opening - 1: Closing \n 2: Gradient - 3: Top Hat \n 4: Black Hat - 5:No Operator", "Morphology", &morph_add_operator, max_add_operator, Morphology_Operations);
+		// Create Trackbar to select kernel type
+		createTrackbar("Element:\n 0: Rect - 1: Cross - 2: Ellipse", "Morphology",
+			&morph_elem, max_elem,
+			Morphology_Operations);
+
+		 //Create Trackbar to choose kernel size
+		createTrackbar("Kernel size:\n 2n +1", "Morphology",
+			&morph_size, max_kernel_size,
+			Morphology_Operations);
+
+		Ptr<BackgroundSubtractor> pBackSub;
+		pBackSub = createBackgroundSubtractorMOG2();
+		Mat fgMask;
+
 		cap.set(1, 0);
 		while (1) {
 			
 			imshow("Mediane", medianeC);
-			//efficientGrayscale(medianeC, med);
+			efficientGrayscale(medianeC, med);
 			//imshow("med", med);
 			Mat frame;
 			 //Capture frame-by-frame
-			
+			cap >> frame;
+			if (frame.empty()) {
+				cap.set(1, 0);
 				cap >> frame;
-				
-			if (!frame.empty())
-			{
-				//bitwise_xor(medianeC, frame, frame);
-				//efficientGrayscale(frame, dst);
-				//absdiff(medianeC,frame,dst2);
-				//threshold(dst2, dst2,20,255,THRESH_BINARY);
-				 //If the frame is empty, break immediately
-				/*if (frame.empty())
-					break;*/
-
-					// Display the resulting frame
-				//imshow("dst", dst);
-				imshow("Source", frame);
 			}
+			
+				//bitwise_xor(medianeC, frame, frame);
+			efficientGrayscale(frame, dst);
+			absdiff(med,dst,dst2);
+			//pBackSub->apply(frame, dst2);
+			threshold(dst2, dst2,35,255,THRESH_BINARY);
+			Morphology_Operations(0, 0);
+
+				 //If the frame is empty, break immediately
+				
+					// Display the resulting frame
+			imshow("dst", dst2);
+			imshow("Source", frame);
+			
 			
 			
 
@@ -449,40 +487,20 @@ int main(int argc, char* argv[]) {
 		cv::destroyAllWindows();
 		
 		return 0;
+
+		
 }
+void Morphology_Operations(int, void*)
+{
+	// Since MORPH_X : 2,3,4,5 and 6
+	int operation = morph_operator + 2;
+	int operation2 = morph_add_operator + 2;
 
-
-
-
-
-//LARGE_INTEGER StartingTime, EndingTime, ElapsedMicroseconds;
-//LARGE_INTEGER Frequency;
-
-//cap.read(framesILike[0]);
-//Mat grayed(framesILike[0].rows, framesILike[0].cols, CV_8UC1);
-
-//QueryPerformanceFrequency(&Frequency);
-//QueryPerformanceCounter(&StartingTime);
-
-//simpleGrayscale(framesILike[0], grayed);
-
-//QueryPerformanceCounter(&EndingTime);
-//ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
-
-//ElapsedMicroseconds.QuadPart *= 1000000;
-//ElapsedMicroseconds.QuadPart /= Frequency.QuadPart;
-
-//cout << ElapsedMicroseconds.QuadPart << endl;
-
-//QueryPerformanceFrequency(&Frequency);
-//QueryPerformanceCounter(&StartingTime);
-
-//cvtColor(framesILike[i], framesILike[i], COLOR_BGR2GRAY);
-
-//QueryPerformanceCounter(&EndingTime);
-//ElapsedMicroseconds.QuadPart = EndingTime.QuadPart - StartingTime.QuadPart;
-
-//ElapsedMicroseconds.QuadPart *= 1000000;
-//ElapsedMicroseconds.QuadPart /= Frequency.QuadPart;
-
-//cout << ElapsedMicroseconds.QuadPart << endl;
+	Mat element = getStructuringElement(morph_elem, Size(2 * morph_size + 1, 2 * morph_size + 1), Point(morph_size, morph_size));
+	Mat dst3(dst2.rows, dst2.cols, CV_8UC3);
+	/// Apply the specified morphology operation
+	morphologyEx(dst2, dst3, operation, element);
+	if(morph_add_operator!=5)
+		morphologyEx(dst3, dst3, operation2, element);
+	imshow("Morphology", dst3);
+}
