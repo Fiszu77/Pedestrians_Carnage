@@ -96,7 +96,7 @@ int LUTR[256] = {};
 void pCarnage(vector<Mat>& framesILikeInColour, Mat& medianeC, int id = 0);
 void pCarnageArr(Mat framesILikeInColour[density], Mat& medianeC, int defRoiH, int id = 0);
 void goThreads(Mat framesILikeInColour[density], Mat& medianeC, int roiH, int nthreads, MultiArrMat& roisArr);
-
+void pause(double timePassed, double fps);
 int morph_elem = 0;
 int morph_size = 0;
 int morph_add_operator = 5;
@@ -115,13 +115,9 @@ mutex mtx;
 int tDone = -1;
 
 int main(int argc, char* argv[]) {
-	morph_elem = 0;
-	morph_size = 0;
-	morph_add_operator = 5;
-	morph_operator = 0;
 
 	const unsigned int nthreads = thread::hardware_concurrency();
-	t = vector<thread>(nthreads - 1);
+	t = vector<thread>(nthreads);
 	Stopwatch timer;
 	//timer.startTimer();
 	VideoCapture cap("zverev.mp4");
@@ -182,7 +178,7 @@ int main(int argc, char* argv[]) {
 	namedWindow("Morphology");
 
 	// Create Trackbar to select Morphology operation
-	
+
 	createTrackbar("Operator:\n 0: Opening - 1: Closing \n 2: Gradient - 3: Top Hat \n 4: Black Hat", "Morphology", &morph_operator, max_operator, Morphology_Operations);
 
 	createTrackbar("Operator:\n 0: Opening - 1: Closing \n 2: Gradient - 3: Top Hat \n 4: Black Hat - 5:No Operator", "Morphology", &morph_add_operator, max_add_operator, Morphology_Operations);
@@ -203,30 +199,31 @@ int main(int argc, char* argv[]) {
 	int FILiterator = 0;
 	int interval = 10;
 	int iter = 0;
-	bool first = false, oneortwo = false;
+	bool first = true, oneortwo = false;
 	Mat frame;
 	while (1) {
-		
+		timer.startTimer();
 		efficientGrayscale(medianeC, med);
 		imshow("Mediane", medianeC);
 		//imshow("med", med);
 		//Capture frame-by-frame
-		if (iter % interval)
+		if (iter % interval == 0)
 		{
+			cap.set(CAP_PROP_POS_FRAMES, iter);
 			if (oneortwo) {
 				cap >> framesILikeInColour[FILiterator];
-				if (framesILikeInColour[i].depth() != CV_8U)
-					framesILikeInColour[i].convertTo(framesILikeInColour[i], CV_8UC3);
-				
+				if (framesILikeInColour[FILiterator].depth() != CV_8U)
+					framesILikeInColour[FILiterator].convertTo(framesILikeInColour[FILiterator], CV_8UC3);
+
 			}
 			else {
 				cap >> framesILikeInColour2[FILiterator];
-				if (framesILikeInColour2[i].depth() != CV_8U)
-					framesILikeInColour2[i].convertTo(framesILikeInColour2[i], CV_8UC3);
-				
+				if (framesILikeInColour2[FILiterator].depth() != CV_8U)
+					framesILikeInColour2[FILiterator].convertTo(framesILikeInColour2[FILiterator], CV_8UC3);
+
 			}
-			FILiterator++;
-			cap.set(1, iter);
+			
+			cap.set(CAP_PROP_POS_FRAMES, iter);
 		}
 		iter++;
 		cap >> frame;
@@ -236,11 +233,11 @@ int main(int argc, char* argv[]) {
 		}*/
 		if (FILiterator == density - 1)
 		{
-			cout <<"FILit:"<< FILiterator << endl;
-			if (first) {
-				while (tDone != nthreads - 2)
+			cout << "FILit:" << FILiterator << endl;
+			if (!first) {
+				for (int i = 0; i < nthreads-1; ++i)
 				{
-
+					t[i].join();
 				}
 			}
 			if (oneortwo) {
@@ -253,28 +250,31 @@ int main(int argc, char* argv[]) {
 				oneortwo = !oneortwo;
 			}
 			FILiterator = 0;
-			first = true;
+			first = false;
 		}
-			
+		if (iter % interval == 0)
+		{
+			FILiterator++;
+		}
 
 		//bitwise_xor(medianeC, frame, frame);
-		//efficientGrayscale(frame, dst);
-		//absdiff(med, dst, dst2);
+		efficientGrayscale(frame, dst);
+		absdiff(med, dst, dst2);
 		//pBackSub->apply(frame, dst2);
-		//threshold(dst2, dst2, 25, 255, THRESH_BINARY);
+		threshold(dst2, dst2, 25, 255, THRESH_BINARY);
 		//Morphology_Operations(0, 0);
 
 		// Display the resulting frame
-		//imshow("dst", dst2);
+		imshow("dst", dst2);
 		imshow("Source", frame);
 
 
 
-
+		pause(timer.getTime(), fps);
 		// Press  ESC on keyboard to exit
-		char c = (char)waitKey(1000 / fps);
-		if (c == 27)
-			break;
+		//char c = (char)waitKey(1000 / fps);
+		//if (c == 27)
+		//	break;
 	}
 	// When everything done, release the video capture object
 	cap.release();
@@ -293,6 +293,14 @@ int main(int argc, char* argv[]) {
 
 
 }
+
+void pause(double timePassed, double fps)
+{
+	double toWait = 1000.0 / fps - timePassed * 0.001;
+	if(toWait>1.0)
+		char c = (char)waitKey(toWait);
+}
+
 void Morphology_Operations(int, void*)
 {
 	// Since MORPH_X : 2,3,4,5 and 6
@@ -418,12 +426,12 @@ void pCarnageArr(Mat framesILikeInColour[density], Mat& medianeC, int defRoiH, i
 			}
 		}
 	}
-	mtx.lock();
+	/*mtx.lock();
 	tDone++;
-	cout <<"tDOne: "<< tDone <<endl;
+	cout << "tDOne: " << tDone << endl;
 	timer.getTimeWithMessage();
-	mtx.unlock();
-	
+	mtx.unlock();*/
+
 }
 
 void pCarnage(vector<Mat>& framesILikeInColour, Mat& medianeC, int id)
@@ -499,7 +507,7 @@ void goThreads(Mat framesILikeInColour[density], Mat& medianeC, int roiH, const 
 {
 	Rect roi;
 	int extRoiH = 0;
-	for (int d = 0; d < nthreads - 1; d++)
+	for (int d = 0; d < nthreads-1; d++)
 	{
 		if (d == nthreads - 2)
 		{
